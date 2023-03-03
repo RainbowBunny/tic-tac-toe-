@@ -16,7 +16,8 @@ const SDL_Color LINE_COLOR = {128, 128, 128};
 
 enum {
     POTATO_IMAGE = 0,
-    BACKGROUND_SQUARE,
+    X_IMAGE,
+    O_IMAGE,
     IMAGE_COUNT
 };
 
@@ -53,13 +54,17 @@ void drawTexture(SDL_Renderer* renderer, SDL_Texture* texture, int cellX, int ce
 }
 
 struct Board {
-    int height, width;
+    int height, width, currentPlayer, top, left;
     SDL_Window* gameWindow;
     SDL_Renderer* gameRenderer;
 
     vector <vector <Position> > board;
-    Board (SDL_Window* gameWindow, SDL_Renderer* gameRenderer, int height = 0, int width = 0) : height(height), width(width), gameWindow(gameWindow), gameRenderer(gameRenderer) {
+    vector <vector <int> > playedPosition;
+
+    Board (SDL_Window* gameWindow, SDL_Renderer* gameRenderer, int height = 0, int width = 0, int top = 0, int left = 0) : height(height), width(width), gameWindow(gameWindow), gameRenderer(gameRenderer), top(top), left(left) {
+        currentPlayer = X_IMAGE;
         board.assign(height, vector <Position> (width));
+        playedPosition.assign(height, vector <int> (width));
     };
 
     void createBoard() {
@@ -80,13 +85,30 @@ struct Board {
         for (int i = 0; i < height; i++) {
             for (int j = 0; j < width; j++) {
                 SDL_Texture* texture = nullptr;
-                if (board[i][j].isInsideRect(CELL_SIZE, CELL_SIZE, mouseX, mouseY)) {
+                if (board[i][j].isInsideRect(CELL_SIZE, CELL_SIZE, mouseX, mouseY) and !playedPosition[i][j]) {
+                    texture = picture[currentPlayer];
+                } else if (!playedPosition[i][j]) {
                     texture = picture[POTATO_IMAGE];
                 } else {
-                    texture = picture[BACKGROUND_SQUARE];
+                    texture = picture[playedPosition[i][j]];
                 }
 
                 drawTexture(gameRenderer, texture, i * CELL_SIZE + 1, j * CELL_SIZE + 1, CELL_SIZE - 2, CELL_SIZE - 2);
+            }
+        }
+    }
+
+    void updateGameState() {
+        int mouseX, mouseY;
+        SDL_GetGlobalMouseState(&mouseX, &mouseY);
+
+        for (int i = 0; i < height; i++) {
+            for (int j = 0; j < width; j++) {
+                if (board[i][j].isInsideRect(CELL_SIZE, CELL_SIZE, mouseX, mouseY) and !playedPosition[i][j]) {
+                    playedPosition[i][j] = currentPlayer;
+                    currentPlayer = X_IMAGE + O_IMAGE - currentPlayer;
+                    renderBoard();
+                }
             }
         }
     }
@@ -97,7 +119,7 @@ void init() {
         logSDLError("SDL_Init", true);
     }
 
-    int imflags = IMG_INIT_JPG;
+    int imflags = IMG_INIT_PNG | IMG_INIT_JPG;
     if ((IMG_Init(imflags) & imflags) != imflags) {
         logSDLError("SDL_image", true);
     }
@@ -146,15 +168,16 @@ void drawBoard() {
 }
 
 void loadImage() {
-    picture[POTATO_IMAGE]      = loadTexture("potato.jpg");
-    picture[BACKGROUND_SQUARE] = loadTexture("Black_square.jpg");
+    picture[POTATO_IMAGE] = loadTexture("potato.jpg");
+    picture[X_IMAGE]      = loadTexture("letterX.png");
+    picture[O_IMAGE]      = loadTexture("letterO.png");
 }
 
 int main() {
     init();
     loadImage();
 
-    Board game(gGlobalWindow, gGlobalRenderer, WINDOW_HEIGHT / CELL_SIZE, WINDOW_WIDTH / CELL_SIZE);
+    Board game(gGlobalWindow, gGlobalRenderer, WINDOW_HEIGHT / CELL_SIZE, WINDOW_WIDTH / CELL_SIZE, 0, 0);
     SDL_Event event;
 
     while (true) {
@@ -168,6 +191,10 @@ int main() {
                 SDL_Quit();
                 exit(0);
                 break;
+            }
+
+            if (event.type == SDL_MOUSEBUTTONDOWN) {
+                game.updateGameState();
             }
         }
     }
