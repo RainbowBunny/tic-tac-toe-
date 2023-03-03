@@ -12,6 +12,7 @@ using namespace std;
 const int WINDOW_WIDTH  = 900;
 const int WINDOW_HEIGHT = 900;
 const int CELL_SIZE = 300;
+const int CELL_TO_WIN = 3;
 const SDL_Color LINE_COLOR = {128, 128, 128};
 
 enum {
@@ -50,7 +51,32 @@ void drawTexture(SDL_Renderer* renderer, SDL_Texture* texture, int cellX, int ce
     if (SDL_RenderCopy(renderer, texture, nullptr, &dstRect) < 0) {
         logSDLError("SDL_RenderCopy", true);
     }
+}
 
+void init() {
+    if (SDL_Init(SDL_INIT_VIDEO) < 0) {
+        logSDLError("SDL_Init", true);
+    }
+
+    int imflags = IMG_INIT_PNG | IMG_INIT_JPG;
+    if ((IMG_Init(imflags) & imflags) != imflags) {
+        logSDLError("SDL_image", true);
+    }
+    
+    gGlobalWindow = SDL_CreateWindow("Tic Tac Toe", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, WINDOW_WIDTH, WINDOW_HEIGHT, 0);
+    if (gGlobalWindow == nullptr) {
+        logSDLError("Cant create window", true);
+    }
+
+    gGlobalRenderer = SDL_CreateRenderer(gGlobalWindow, -1, SDL_WINDOW_SHOWN);
+    if (gGlobalRenderer == nullptr) {
+        logSDLError("Cant get renderer", true);
+    }
+}
+
+void quitSDL() {
+    SDL_Quit();
+    exit(0);
 }
 
 struct Board {
@@ -98,6 +124,41 @@ struct Board {
         }
     }
 
+    void checkWinner() {
+
+        int dx[] = {1, 1, 0,  1};
+        int dy[] = {0, 1, 1, -1};
+        int diagCount = 4;
+
+        int lastTurnPlayer = X_IMAGE + O_IMAGE - currentPlayer;
+
+        for (int i = 0; i < height; i++) {
+            for (int j = 0; j < width; j++) {
+                for (int diag = 0; diag < diagCount; diag++) {
+                    bool winning = true;
+                    
+                    for (int k = 0; k < CELL_TO_WIN; k++) {
+                        if (i + k * dx[diag] >= height or j + k * dy[diag] >= width) {
+                            winning = false;
+                            break;
+                        }
+
+                        if (playedPosition[i + k * dx[diag]][j + k * dy[diag]] != lastTurnPlayer) {
+                            winning = false;
+                            break;
+                        }
+                    }
+
+                    if (winning) {
+                        cout << lastTurnPlayer << " has won!" << endl;
+                        quitSDL();
+                    }
+                }
+
+            }
+        }
+    }
+
     void updateGameState() {
         int mouseX, mouseY;
         SDL_GetGlobalMouseState(&mouseX, &mouseY);
@@ -108,32 +169,26 @@ struct Board {
                     playedPosition[i][j] = currentPlayer;
                     currentPlayer = X_IMAGE + O_IMAGE - currentPlayer;
                     renderBoard();
+                    checkWinner();
                 }
             }
         }
     }
-};
- 
-void init() {
-    if (SDL_Init(SDL_INIT_VIDEO) < 0) {
-        logSDLError("SDL_Init", true);
-    }
 
-    int imflags = IMG_INIT_PNG | IMG_INIT_JPG;
-    if ((IMG_Init(imflags) & imflags) != imflags) {
-        logSDLError("SDL_image", true);
+    void checkRunning() {
+        for (int i = 0; i < height; i++) {
+            for (int j = 0; j < width; j++) {
+                if (!playedPosition[i][j]) {
+                    return;
+                }
+            }
+        }
+
+        cout << "Draw" << endl;
+        quitSDL();
     }
     
-    gGlobalWindow = SDL_CreateWindow("Tic Tac Toe", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, WINDOW_WIDTH, WINDOW_HEIGHT, 0);
-    if (gGlobalWindow == nullptr) {
-        logSDLError("Cant create window", true);
-    }
-
-    gGlobalRenderer = SDL_CreateRenderer(gGlobalWindow, -1, SDL_WINDOW_SHOWN);
-    if (gGlobalRenderer == nullptr) {
-        logSDLError("Cant get renderer", true);
-    }
-}
+};
 
 SDL_Texture* loadTexture(string path) {
     SDL_Texture* texture = nullptr;
@@ -183,13 +238,13 @@ int main() {
     while (true) {
         game.createBoard();
         game.renderBoard();
+        game.checkRunning();
         drawBoard();
         // SDL_GetGlobalMouseState(&x, &y);
         // SDL_GetWindowPosition(gGlobalWindow, &z, &t);
         while (SDL_PollEvent(&event)) {
             if (event.type == SDL_QUIT) {
-                SDL_Quit();
-                exit(0);
+                quitSDL();
                 break;
             }
 
